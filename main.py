@@ -1,14 +1,8 @@
-from object_detect import *
-import os
+from object_detect import FaceRecognitionSystem
 
 def main():
-  videoPath = 0
-  configPath = os.path.join("model_data", "ssd_mobilenet_v3_large_coco_2020_01_14.pbtxt")
-  modelPath = os.path.join("model_data", "frozen_inference_graph.pb")
-  classesPath = os.path.join("model_data", "coco.names")
+  system = FaceRecognitionSystem(dataset_dir="dataset", save_dir="faces")
+  system.recognise_faces(videoPath=0)  # 0 = webcam
 
-  detector = Detector(videoPath, configPath, modelPath, classesPath)
-  detector.onVideo()
-
-if __name__ == '__main__':
+if __name__ == "__main__":
   main()

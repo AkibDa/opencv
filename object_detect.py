@@ -1,96 +1,96 @@
 import cv2
-import numpy as np
+import face_recognition
+import os
 import time
+import csv
+from datetime import datetime
 
-np.random.seed(20)
+class FaceRecognitionSystem:
+  def __init__(self, dataset_dir="dataset", save_dir="faces", log_file="attendance.csv"):
+    self.dataset_dir = dataset_dir
+    self.save_dir = save_dir
+    self.log_file = log_file
+    os.makedirs(save_dir, exist_ok=True)
 
+    # Load known faces
+    self.known_encodings = []
+    self.known_rolls = []
 
-class Detector:
-  def __init__(self, videoPath, configPath, modelPath, classesPath):
-    self.videoPath = videoPath
-    self.configPath = configPath
-    self.modelPath = modelPath
-    self.classesPath = classesPath
+    for file in os.listdir(dataset_dir):
+      if file.endswith((".jpg", ".png", ".jpeg")):
+        roll_id = os.path.splitext(file)[0]  # filename without extension
+        img_path = os.path.join(dataset_dir, file)
+        img = face_recognition.load_image_file(img_path)
+        enc = face_recognition.face_encodings(img)
+        if len(enc) > 0:
+          self.known_encodings.append(enc[0])
+          self.known_rolls.append(roll_id)
+        else:
+          print(f"[WARN] No face found in {file}")
 
-    ###############################
+    self.img_counts = {}
+    self.logged_rolls = set()  # avoid duplicate logging in one session
 
-    self.net = cv2.dnn_DetectionModel(self.modelPath, self.configPath)
-    self.net.setInputSize(320,320)
-    self.net.setInputScale(1.0 / 127.5)
-    self.net.setInputMean((127.5, 127.5, 127.5))
-    self.net.setInputSwapRB(True)
+    # create CSV with headers if not exists
+    if not os.path.exists(self.log_file):
+      with open(self.log_file, mode="w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["Roll_No", "Timestamp"])
 
-    self.readClasses()
+def log_attendance(self, roll_id):
+  if roll_id not in self.logged_rolls:
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open(self.log_file, mode="a", newline="") as f:
+      writer = csv.writer(f)
+      writer.writerow([roll_id, timestamp])
+    self.logged_rolls.add(roll_id)
+    print(f"[LOGGED] {roll_id} at {timestamp}")
 
-  def readClasses(self):
-    with open(self.classesPath, 'r') as f:
-      self.classesList = f.read().splitlines()
+def recognise_faces(self, videoPath=0):  # 0 = webcam
+  cap = cv2.VideoCapture(videoPath)
+  startTime = 0
 
-    self.classesList.insert(0, "__background__")
+  while True:
+    success, frame = cap.read()
+    if not success:
+      break
 
-    self.colorList = np.random.uniform(0, 255, size=(len(self.classesList), 3))
+    currentTime = time.time()
+    fps = 1 / (currentTime - startTime) if startTime != 0 else 0
+    startTime = currentTime
 
-    #print(self.classesList)
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    face_locations = face_recognition.face_locations(rgb_frame)
+    face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
 
-  def onVideo(self):
-    cap = cv2.VideoCapture(self.videoPath)
+    for (top, right, bottom, left), face_encoding in zip(face_locations, face_encodings):
+      matches = face_recognition.compare_faces(self.known_encodings, face_encoding, tolerance=0.5)
+      roll_id = "Unknown"
 
-    if not cap.isOpened():
-      print("Error opening video stream or file")
-      return
+      if True in matches:
+        match_index = matches.index(True)
+        roll_id = self.known_rolls[match_index]
 
-    (success, image) = cap.read()
+        # Save cropped images for recognized roll number
+        face_img = frame[top:bottom, left:right]
+        self.img_counts[roll_id] = self.img_counts.get(roll_id, 0) + 1
+        filename = os.path.join(self.save_dir, f"{roll_id}_{self.img_counts[roll_id]}.jpg")
+        cv2.imwrite(filename, face_img)
 
-    startTime = 0
+        # Log attendance
+        self.log_attendance(roll_id)
 
-    while success:
-      currentTime = time.time()
-      fps = 1 / (currentTime - startTime)
-      startTime = currentTime
+      # Draw rectangle + label
+      color = (0, 255, 0) if roll_id != "Unknown" else (0, 0, 255)
+      cv2.rectangle(frame, (left, top), (right, bottom), color, 2)
+      cv2.putText(frame, roll_id, (left, top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
 
-      classLabelIDs, confidence, bboxs = self.net.detect(image, confThreshold=0.5)
+    cv2.putText(frame, "FPS: " + str(int(fps)), (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+    cv2.imshow("Face Recognition", frame)
 
-      bboxs = list(bboxs)
-      confidence = list(np.array(confidence).reshape(1, -1)[0])
-      confidence = list(map(float, confidence))
+    key = cv2.waitKey(1) & 0xFF
+    if key == ord("q"):
+      break
 
-      bboxIdx = cv2.dnn.NMSBoxes(bboxs, confidence, 0.5, nms_threshold=0.2)
-
-      if len(bboxIdx) != 0:
-        for i in range(0, len(bboxIdx)):
-          bbox = bboxs[np.squeeze(bboxIdx[i])]
-          classConfidence = confidence[np.squeeze(bboxIdx[i])]
-          classLabelID = np.squeeze(classLabelIDs[np.squeeze(bboxIdx[i])])
-          classLabel = self.classesList[classLabelID]
-          classColor = [int(c) for c in self.colorList[classLabelID]]
-
-          displayText = "{}:{:.2f}".format(classLabel, classConfidence)
-
-          x, y, w, h = bbox
-
-          cv2.rectangle(image, (x, y), (x + w, y + h), classColor, 2)
-          cv2.putText(image, displayText, (x,y-10), cv2.FONT_HERSHEY_PLAIN, 1, classColor, 2)
-
-          ####################################
-
-          lineWidth = min(int(w * 0.3), int(h * 0.3))
-
-          cv2.line(image, (x, y), (x + lineWidth, y), classColor, 5)
-          cv2.line(image, (x, y), (x , y + lineWidth), classColor, 5)
-          cv2.line(image, (x + w, y), (x + w - lineWidth , y), classColor, 5)
-          cv2.line(image, (x + w, y), (x + w , y + lineWidth), classColor, 5)
-          cv2.line(image, (x, y + h), (x , y + h - lineWidth), classColor, 5)
-          cv2.line(image, (x, y + h), (x + lineWidth , y + h), classColor, 5)
-          cv2.line(image, (x + w, y + h), (x + w - lineWidth , y + h), classColor, 5)
-          cv2.line(image, (x + w, y + h), (x + w , y + h - lineWidth), classColor, 5)
-
-      cv2.putText(image, "FPS: " + str(int(fps)), (20,70), cv2.FONT_HERSHEY_PLAIN, 2, (0,255,0), 2)
-      cv2.imshow("Result", image)
-
-      key = cv2.waitKey(1) & 0xFF
-      if key == ord("q"):
-        break
-
-      (success, image) = cap.read()
-
-    cv2.destroyAllWindows()
+  cap.release()
+  cv2.destroyAllWindows()
