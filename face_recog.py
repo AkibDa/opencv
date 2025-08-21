@@ -3,7 +3,7 @@ import face_recognition
 import os
 
 # Path to folder containing target images
-TARGET_FOLDER = "images"
+TARGET_FOLDER = "datasets"
 
 # Load target face encodings
 known_encodings = []
