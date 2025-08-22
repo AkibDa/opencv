@@ -12,7 +12,7 @@ known_encodings = []
 known_names = []
 
 for filename in os.listdir(targets_folder):
-  if filename.lower().endswith((".jpg", ".jpeg", ".png")):
+  if filename.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
     path = os.path.join(targets_folder, filename)
     image = face_recognition.load_image_file(path)
     encodings = face_recognition.face_encodings(image)
