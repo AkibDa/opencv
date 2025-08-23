@@ -205,9 +205,14 @@ class MacFaceRecognizer:
 
 def main():
     # Configuration
-    TARGETS_FOLDER = "datasets/targets"
-    CROWD_FOLDER = "datasets/crowd_images"
-    OUTPUT_FOLDER = "datasets/results_mac"
+    TARGETS_FOLDER = "../datasets/targets"
+    CROWD_FOLDER = "../datasets/crowd_images"
+    OUTPUT_FOLDER = "../datasets/results"
+
+    # Ensure the folders exist
+    os.makedirs(TARGETS_FOLDER, exist_ok=True)
+    os.makedirs(CROWD_FOLDER, exist_ok=True)
+    os.makedirs(OUTPUT_FOLDER, exist_ok=True)
     
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
     

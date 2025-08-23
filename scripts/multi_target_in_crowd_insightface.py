@@ -4,9 +4,9 @@ import os
 from insightface.app import FaceAnalysis
 
 # --- Paths ---
-targets_folder = "datasets/targets"         
-crowd_folder = "datasets/crowd_images"      
-output_folder = "datasets/results"          
+targets_folder = "../datasets/targets"         
+crowd_folder = "../datasets/crowd_images"      
+output_folder = "../datasets/results"          
 os.makedirs(output_folder, exist_ok=True)
 
 # --- Initialize RetinaFace ---

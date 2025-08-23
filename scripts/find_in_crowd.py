@@ -1,7 +1,7 @@
 import cv2
 import face_recognition
 
-TARGET_IMG = "datasets/target1.webp"
+TARGET_IMG = "../datasets/target1.webp"
 target_img = face_recognition.load_image_file(TARGET_IMG)
 target_encodings = face_recognition.face_encodings(target_img)
 
@@ -11,7 +11,7 @@ target_encoding = target_encodings[0]
 
 print("✅ Target face loaded.")
 
-CROWD_IMG = "datasets/crowd1.jpg"
+CROWD_IMG = "../datasets/crowd1.jpg"
 crowd_img = face_recognition.load_image_file(CROWD_IMG)
 crowd_rgb = cv2.cvtColor(crowd_img, cv2.COLOR_BGR2RGB)
 

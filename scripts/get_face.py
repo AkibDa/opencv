@@ -150,8 +150,8 @@ def enhance_face_image(face_image):
 
 if __name__ == "__main__":
     # Configuration
-    crowd_image_path = "datasets/crowd_images/IMG_8093.jpg"  # Your crowd image
-    output_dir = "datasets/detected_faces"  # Where to save extracted faces
+    crowd_image_path = "../datasets/crowd_images/IMG_8093.jpg"  # Your crowd image
+    output_dir = "../datasets/detected_faces"  # Where to save extracted faces
     
     print("🚀 Starting high-quality face extraction from crowd image...")
     print("=" * 60)

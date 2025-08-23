@@ -86,9 +86,9 @@ def non_max_suppression(boxes, overlapThresh=0.3):
 
 if __name__ == "__main__":
   freeze_support() 
-  targets_folder = "datasets/targets"
-  crowd_folder = "datasets/crowd_images"
-  output_folder = "datasets/results"
+  targets_folder = "../datasets/targets"
+  crowd_folder = "../datasets/crowd_images"
+  output_folder = "../datasets/results"
   os.makedirs(output_folder, exist_ok=True)
 
   # 1. Encode target images in parallel
