@@ -10,8 +10,8 @@ output_folder = "../datasets/results"
 os.makedirs(output_folder, exist_ok=True)
 
 # --- Initialize RetinaFace ---
-app = FaceAnalysis(name="retinaface_mnet")  # lightweight RetinaFace
-app.prepare(ctx_id=0, nms=0.4)  # ctx_id=0 for CPU, nms for overlapping faces
+app = FaceAnalysis(name="buffalo_l")  # lightweight RetinaFace
+app.prepare(ctx_id=0, det_size=(1024, 1024))  # ctx_id=0 for CPU, nms for overlapping faces
 
 # --- Load target faces ---
 target_encodings = {}
