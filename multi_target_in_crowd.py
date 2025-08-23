@@ -2,9 +2,9 @@ import face_recognition
 import cv2
 import os
 
-targets_folder = "targets"         
-crowd_folder = "crowd_images"      
-output_folder = "results"          
+targets_folder = "datasets/targets"         
+crowd_folder = "datasets/crowd_images"      
+output_folder = "datasets/results"          
 
 os.makedirs(output_folder, exist_ok=True)
 
