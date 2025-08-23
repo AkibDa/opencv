@@ -2,7 +2,7 @@ import face_recognition
 import cv2
 import os
 
-crowd_image_path = "datasets/crowd.jpg"   
+crowd_image_path = "datasets/crowd_images/IMG_8095.jpg"   
 output_dir = "datasets/detected_faces"
 
 os.makedirs(output_dir, exist_ok=True)
