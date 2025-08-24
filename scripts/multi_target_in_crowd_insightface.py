@@ -1,19 +1,15 @@
-# multi_target_in_crowd_insightface.py
 import cv2
 import os
 from insightface.app import FaceAnalysis
 
-# --- Paths ---
-targets_folder = "../datasets/detected_faces"  # Folder with target faces   
+targets_folder = "../datasets/detected_faces"
 crowd_folder = "../datasets/crowd_images"      
 output_folder = "../datasets/results"          
 os.makedirs(output_folder, exist_ok=True)
 
-# --- Initialize RetinaFace ---
 app = FaceAnalysis(name="buffalo_l")
 app.prepare(ctx_id=0, det_size=(1024, 1024))
 
-# --- Load target faces ---
 target_encodings = {}
 failed_targets = []
 
@@ -26,7 +22,6 @@ for filename in os.listdir(targets_folder):
             failed_targets.append(filename)
             continue
 
-        # Resize for better face detection
         h, w = img.shape[:2]
         max_dim = 1024
         min_dim = 256
@@ -55,7 +50,6 @@ if not target_encodings:
     print("❌ No valid target faces found. Please add clear frontal face images.")
     exit()
 
-# --- Function to match faces ---
 def match_face(face_embedding, target_encodings, threshold=0.6):
     from numpy import linalg as LA
     for name, emb in target_encodings.items():
@@ -64,7 +58,6 @@ def match_face(face_embedding, target_encodings, threshold=0.6):
             return name
     return None
 
-# --- Process crowd images ---
 for filename in os.listdir(crowd_folder):
     if filename.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
         img_path = os.path.join(crowd_folder, filename)
