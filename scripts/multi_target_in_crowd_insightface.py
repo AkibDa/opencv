@@ -21,7 +21,7 @@ app = FaceAnalysis(name="buffalo_l", providers=['CPUExecutionProvider'])
 app.prepare(ctx_id=0, det_size=(1024, 1024))
 
 # =====================
-# Load Targets
+# Load Targets (average embeddings if multiple)
 # =====================
 target_encodings = {}
 
@@ -37,7 +37,9 @@ for filename in os.listdir(targets_folder):
 
         faces = app.get(img_rgb)
         if len(faces) > 0:
-            emb = faces[0].normed_embedding
+            emb = faces[0].normed_embedding  # normalized embedding
+
+            # average if already exists
             if name in target_encodings:
                 target_encodings[name].append(emb)
             else:
@@ -50,43 +52,33 @@ for name in target_encodings:
 print(f"Loaded {len(target_encodings)} target identities: {list(target_encodings.keys())}")
 
 # =====================
-# Helper: get best dynamic threshold
+# Auto threshold based on target distances
 # =====================
-def get_best_threshold(face_embeddings, target_encodings, factor_range=(1.0, 1.5, 0.05)):
-    """
-    For a set of face embeddings, try multiple factors and return the factor
-    that maximizes recognized faces.
-    """
-    best_factor = factor_range[0]
-    max_recognized = 0
-
-    for factor in np.arange(*factor_range):
-        recognized_count = 0
-        for emb in face_embeddings:
-            min_dist = min(LA.norm(emb - target_emb) for target_emb in target_encodings.values())
-            if min_dist < min_dist * factor:  # if distance is within scaled threshold
-                recognized_count += 1
-        if recognized_count > max_recognized:
-            max_recognized = recognized_count
-            best_factor = factor
-
-    return best_factor
+target_embs = list(target_encodings.values())
+if len(target_embs) > 1:
+    max_dist_between_targets = max(
+        [LA.norm(e1 - e2) for i, e1 in enumerate(target_embs) for j, e2 in enumerate(target_embs) if i != j]
+    )
+    threshold = min(max_dist_between_targets * 1.05, 1.0)  # small margin
+else:
+    threshold = 1.0  # default if only 1 target
+print(f"Auto threshold set to: {threshold:.2f}")
 
 # =====================
-# Helper: match with dynamic threshold
+# Helper function
 # =====================
-def match_face_dynamic(embedding, target_encodings, factor=1.1):
+def match_face(embedding, target_encodings, threshold):
     best_match = "Unknown"
     best_dist = float("inf")
 
     for name, target_emb in target_encodings.items():
         dist = LA.norm(embedding - target_emb)
+
         if dist < best_dist:
             best_dist = dist
             best_match = name
 
-    dynamic_threshold = best_dist * factor
-    if best_dist < dynamic_threshold:
+    if best_dist < threshold:
         return best_match, best_dist
     else:
         return "Unknown", best_dist
@@ -94,7 +86,8 @@ def match_face_dynamic(embedding, target_encodings, factor=1.1):
 # =====================
 # Process Crowd Images
 # =====================
-total_detected, total_recognized = 0, 0
+total_faces = 0
+total_recognized = 0
 start_time = time.time()
 
 for filename in os.listdir(crowd_folder):
@@ -107,42 +100,36 @@ for filename in os.listdir(crowd_folder):
 
         faces = app.get(img_rgb)
         print(f"\n[{filename}] Detected {len(faces)} faces")
-
-        face_embeddings = [face.normed_embedding for face in faces]
-        best_factor = 1.1  # fallback
-        if face_embeddings:
-            best_factor = get_best_threshold(face_embeddings, target_encodings)
-
-        print(f"📏 Using dynamic factor: {best_factor:.2f}")
-
-        faces_detected, faces_recognized = 0, 0
+        total_faces += len(faces)
 
         for i, face in enumerate(faces):
-            name, dist = match_face_dynamic(face.normed_embedding, target_encodings, factor=best_factor)
-            faces_detected += 1
+            name, dist = match_face(face.normed_embedding, target_encodings, threshold=threshold)
 
-            # crop and save face
             x1, y1, x2, y2 = face.bbox.astype(int)
-            cropped_face = img[y1:y2, x1:x2]
+            x1, y1 = max(0, x1), max(0, y1)
+            x2, y2 = min(img.shape[1], x2), min(img.shape[0], y2)
 
+            if x2 <= x1 or y2 <= y1:
+                print(f"⚠️ Skipping invalid crop for face {i+1}")
+                continue
+
+            cropped_face = img[y1:y2, x1:x2]
             out_name = f"{os.path.splitext(filename)[0]}_face{i+1}_{name}.jpg"
             cv2.imwrite(os.path.join(output_folder, out_name), cropped_face)
 
             if name != "Unknown":
-                faces_recognized += 1
+                total_recognized += 1
                 print(f"✅ Recognized {name} (dist={dist:.2f}) → Saved {out_name}")
             else:
                 print(f"❌ Unknown (dist={dist:.2f}) → Saved {out_name}")
 
-        print(f"📷 {filename} -> Detected: {faces_detected}, Recognized: {faces_recognized}")
-        total_detected += faces_detected
-        total_recognized += faces_recognized
-
 end_time = time.time()
-elapsed = end_time - start_time
 
+# =====================
+# Summary
+# =====================
 print("\n=== RECOGNITION SUMMARY ===")
-print(f"🕒 Time spent: {elapsed:.2f} seconds")
-print(f"👀 Total faces detected: {total_detected}")
+print(f"🕒 Time spent: {end_time - start_time:.2f} seconds")
+print(f"👀 Total faces detected: {total_faces}")
 print(f"🎯 Total faces recognized: {total_recognized}")
-print("===================")
+print("============================")
