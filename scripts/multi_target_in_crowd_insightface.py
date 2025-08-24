@@ -5,24 +5,15 @@ from numpy import linalg as LA
 from insightface.app import FaceAnalysis
 import time
 
-# =====================
-# Config
-# =====================
 targets_folder = "../datasets/targets"
 crowd_folder   = "../datasets/crowd_images"
 output_folder  = "../datasets/results"
 
 os.makedirs(output_folder, exist_ok=True)
 
-# =====================
-# Initialize InsightFace
-# =====================
 app = FaceAnalysis(name="buffalo_l", providers=['CPUExecutionProvider'])
 app.prepare(ctx_id=0, det_size=(1024, 1024))
 
-# =====================
-# Load Targets (average embeddings if multiple)
-# =====================
 target_encodings = {}
 
 for filename in os.listdir(targets_folder):
@@ -37,23 +28,18 @@ for filename in os.listdir(targets_folder):
 
         faces = app.get(img_rgb)
         if len(faces) > 0:
-            emb = faces[0].normed_embedding  # normalized embedding
+            emb = faces[0].normed_embedding
 
-            # average if already exists
             if name in target_encodings:
                 target_encodings[name].append(emb)
             else:
                 target_encodings[name] = [emb]
 
-# finalize averages
 for name in target_encodings:
     target_encodings[name] = np.mean(target_encodings[name], axis=0)
 
 print(f"Loaded {len(target_encodings)} target identities: {list(target_encodings.keys())}")
 
-# =====================
-# Auto threshold based on target distances
-# =====================
 target_embs = list(target_encodings.values())
 if len(target_embs) > 1:
     max_dist_between_targets = max(
@@ -64,9 +50,6 @@ else:
     threshold = 1.0  # default if only 1 target
 print(f"Auto threshold set to: {threshold:.2f}")
 
-# =====================
-# Helper function
-# =====================
 def match_face(embedding, target_encodings, threshold):
     best_match = "Unknown"
     best_dist = float("inf")
@@ -83,9 +66,6 @@ def match_face(embedding, target_encodings, threshold):
     else:
         return "Unknown", best_dist
 
-# =====================
-# Process Crowd Images
-# =====================
 total_faces = 0
 total_recognized = 0
 start_time = time.time()
@@ -125,9 +105,6 @@ for filename in os.listdir(crowd_folder):
 
 end_time = time.time()
 
-# =====================
-# Summary
-# =====================
 print("\n=== RECOGNITION SUMMARY ===")
 print(f"🕒 Time spent: {end_time - start_time:.2f} seconds")
 print(f"👀 Total faces detected: {total_faces}")
