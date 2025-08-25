@@ -24,7 +24,7 @@ os.makedirs(output_folder, exist_ok=True)
 app = FaceAnalysis(name="buffalo_l")
 app.prepare(ctx_id=0, det_size=(640, 640))
 
-# ---------------- Helper: Average multiple target embeddings ----------------
+# ---------------- Load target embeddings (multiple images per person) ----------------
 def load_target_embeddings(target_folder):
     target_embeddings = {}
     for filename in os.listdir(target_folder):
@@ -33,7 +33,12 @@ def load_target_embeddings(target_folder):
             name = os.path.splitext(filename)[0]
 
             img = cv2.imread(path)
-            faces = app.get(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+            if img is None:
+                logging.warning(f"Failed to load target image: {filename}")
+                continue
+
+            img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            faces = app.get(img_rgb)
             if faces:
                 emb = faces[0].embedding / np.linalg.norm(faces[0].embedding)  # normalize
                 if name in target_embeddings:
@@ -41,7 +46,8 @@ def load_target_embeddings(target_folder):
                 else:
                     target_embeddings[name] = [emb]
                 logging.info(f"Loaded target image: {filename}")
-    # average embeddings per person
+
+    # Average embeddings per person
     averaged_embeddings = {}
     for name, embs in target_embeddings.items():
         averaged_embeddings[name] = np.mean(embs, axis=0)
@@ -52,24 +58,19 @@ if not target_encodings:
     logging.error("No target faces found!")
     exit()
 
-# ---------------- FAISS index ----------------
 names_list = list(target_encodings.keys())
 embs_list = np.array(list(target_encodings.values()), dtype="float32")
 d = embs_list.shape[1]
+
+# ---------------- FAISS index ----------------
 index = faiss.IndexFlatL2(d)
 index.add(embs_list)
 
-# ---------------- Dynamic threshold helper ----------------
-def choose_threshold(distances, min_threshold=0.8, max_threshold=1.5):
-    """
-    Choose threshold dynamically based on observed distances.
-    For very dense/low-quality crowds, increase threshold.
-    """
-    if len(distances) == 0:
-        return min_threshold
-    avg_dist = np.mean(distances)
-    threshold = min(max(avg_dist * 1.1, min_threshold), max_threshold)
-    return threshold
+# ---------------- Thresholding ----------------
+BASE_THRESHOLD = 1.0     # typical for dense crowds
+MAX_THRESHOLD = 1.3      # cap for small faces
+MIN_THRESHOLD = 0.65     # for high-res/large faces
+RATIO_TEST = 0.8         # k-NN ratio threshold
 
 # ---------------- Process Crowd Images ----------------
 start_time = time.time()
@@ -81,43 +82,63 @@ for filename in os.listdir(crowd_folder):
     if filename.lower().endswith((".jpg", ".jpeg", ".png")):
         path = os.path.join(crowd_folder, filename)
         img = cv2.imread(path)
+        if img is None:
+            logging.warning(f"Failed to load crowd image: {filename}")
+            continue
+
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         faces = app.get(img_rgb)
 
-        # Gather distances to all targets to choose threshold
-        distances = []
-        for face in faces:
-            embedding = face.embedding / np.linalg.norm(face.embedding)
-            D, I = index.search(np.array([embedding], dtype="float32"), 1)
-            distances.append(D[0][0])
-
-        threshold = choose_threshold(distances)
-        logging.info(f"Processing {filename} with dynamic threshold={threshold:.2f}")
-
         for i, face in enumerate(faces):
             total_faces += 1
-            embedding = face.embedding / np.linalg.norm(face.embedding)
-            D, I = index.search(np.array([embedding], dtype="float32"), 1)
-
-            closest_name = names_list[I[0][0]]
-            distance = D[0][0]
-
-            if distance < threshold:
-                name = closest_name
-                total_recognized += 1
-                color = (0, 255, 0)
-            else:
-                name = "Unknown"
-                color = (0, 0, 255)
-
-            # Annotate image
             x1, y1, x2, y2 = face.bbox.astype(int)
-            cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
-            cv2.putText(img, f"{name} ({distance:.2f})",
-                        (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX,
-                        0.6, color, 2)
+            face_size = (x2 - x1) * (y2 - y1)
 
-            # Log CSV
+            # Skip tiny faces
+            if face_size < 400:  # ~20x20 pixels
+                name = "Unknown"
+                distance = np.nan
+                threshold = np.nan
+                closest_name = "N/A"
+                ratio = np.nan
+                logging.info(f"Skipped tiny face {i+1} in {filename}")
+            else:
+                embedding = face.embedding / np.linalg.norm(face.embedding)
+
+                # Search top 3 closest targets
+                D, I = index.search(np.array([embedding], dtype="float32"), k=3)
+
+                distance = D[0][0]
+                closest_name = names_list[I[0][0]]
+
+                # Adjust threshold based on face size
+                threshold = BASE_THRESHOLD
+                if face_size < 4000:  # small faces
+                    threshold = max(MAX_THRESHOLD, threshold)
+                elif face_size > 10000:  # large faces
+                    threshold = MIN_THRESHOLD
+
+                # Ratio test: ensure the closest is significantly better than 2nd closest
+                if D[0][1] == 0:
+                    ratio = 0
+                else:
+                    ratio = D[0][0] / (D[0][1] + 1e-6)
+
+                if distance < threshold and ratio < RATIO_TEST:
+                    name = closest_name
+                    total_recognized += 1
+                    color = (0, 255, 0)
+                else:
+                    name = "Unknown"
+                    color = (0, 0, 255)
+
+                # Annotate image
+                cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
+                cv2.putText(img, f"{name} ({distance:.2f})",
+                            (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX,
+                            0.6, color, 2)
+
+            # Log results
             results_log.append({
                 "image": filename,
                 "face_id": total_faces,
@@ -126,7 +147,7 @@ for filename in os.listdir(crowd_folder):
                 "threshold_used": threshold
             })
 
-            print(f"[DEBUG] {filename} face {i}: closest={closest_name}, distance={distance:.4f}, threshold={threshold:.2f}")
+            print(f"[DEBUG] {filename} face {i+1}: closest={closest_name}, distance={distance:.4f}, threshold={threshold:.2f}, ratio={ratio:.2f}")
 
         out_path = os.path.join(output_folder, f"annotated_{filename}")
         cv2.imwrite(out_path, img)
