@@ -4,6 +4,14 @@ from datetime import datetime
 
 teachers_bp = Blueprint("teachers", __name__)
 
+@teachers_bp.get("/")
+def list_teachers():
+    teachers = list(mongo.db.teachers.find({}, {"face_embedding": 0}))
+    for t in teachers:
+        t["_id"] = str(t["_id"])
+    return jsonify({"ok": True, "teachers": teachers})
+
+
 @teachers_bp.post("/")
 def add_teacher():
     data = request.json

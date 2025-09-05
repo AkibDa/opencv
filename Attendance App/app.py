@@ -1,6 +1,6 @@
 from flask import Flask, jsonify
 from db import init_db
-from routes.students import students_bp
+from routes.students import students_bp, students_ui_bp
 from routes.teachers import teachers_bp
 from routes.enroll import enroll_bp
 from routes.sessions import sessions_bp
@@ -8,10 +8,12 @@ from routes.attendance import attendance_bp
 import os
 
 app = Flask(__name__)
+app.secret_key = "your_super_secret_key_here"
 mongo = init_db(app)
 
 # Register blueprints with clean URL prefixes
 app.register_blueprint(students_bp, url_prefix="/api/students")
+app.register_blueprint(students_ui_bp , url_prefix="/students")
 app.register_blueprint(teachers_bp, url_prefix="/api/teachers")
 app.register_blueprint(enroll_bp, url_prefix="/api/enroll")
 app.register_blueprint(sessions_bp, url_prefix="/api/sessions")
@@ -30,6 +32,10 @@ def index():
             "attendance_recognize": "/api/attendance/recognize"
         }
     })
+
+@app.route("/api/test")
+def test_api():
+    return {"ok": True, "msg": "API working"}
 
 
 # Error handlers

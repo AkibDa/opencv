@@ -1,0 +1,12 @@
+<!doctype html>
+<html>
+<head><title>Students</title></head>
+<body>
+<h1>All Students</h1>
+<ul>
+{% for s in students %}
+  <li>{{ s.name }} ({{ s.roll_no }}) - {{ s.email }}</li>
+{% endfor %}
+</ul>
+</body>
+</html>
